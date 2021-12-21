@@ -4,7 +4,6 @@ import time
 
 import psycopg2
 import json
-from psycopg2 import OperationalError
 
 
 class KinopoiskData:
@@ -65,7 +64,7 @@ class KinopoiskData:
                           "Республика Корея", "Белорусь", "Украина", "Франция"]
         self.genres = ["коммедия", "боевик", "драмма", "экшн", "мелодрамма", "исторический", "документальный",
                        "ограбление", "криминал", "фантастика", "спортивный"]
-        self.review_types = ["+", "-", "+-"]
+        self.review_types = ["+", "-", "="]
         self.roles = ["режисер", "актер", "сценарист", "художник", "композитор", "главный редактор", "звукорежессер",
                       "продюссер", "оператор", "монтаж"]
         with open("russian_names.json", "r", encoding='utf-8-sig') as read_file:
@@ -135,29 +134,33 @@ def create_connection(db_name, db_user, db_password, db_host, db_port):
         )
         connection.autocommit = True
         print("Connection to PostgreSQL DB successful")
-    except OperationalError as e:
+    except Exception as e:
         print(f"The error '{e}' occurred")
     return connection
 
 
-def execute_query(connection, query):
-    connection.autocommit = True
+def execute_query(connection, query, insert_elem=None):
     cursor = connection.cursor()
     try:
-        cursor.execute(query)
-        print("Query executed successfully")
-    except OperationalError as e:
+        if insert_elem:
+            cursor.execute(query, insert_elem)
+        else:
+            cursor.execute(query)
+    except Exception as e:
         print(f"The error '{e}' occurred")
 
 
-def execute_read_query(connection, query):
+def execute_read_query(connection, query, insert_elem=None):
     cursor = connection.cursor()
-    result = None
     try:
+        if insert_elem:
+            cursor.execute(query, insert_elem)
+            result = cursor.fetchall()
+            return result
         cursor.execute(query)
         result = cursor.fetchall()
         return result
-    except OperationalError as e:
+    except Exception as e:
         print(f"The error '{e}' occurred")
 
 
@@ -204,6 +207,18 @@ def generate_date():
     return time.strftime(date_format, time.localtime(ptime))
 
 
+def generate_timestamp():
+    start = "1/1/1978 1:30 PM"
+    end = "1/1/2021 4:50 AM"
+    date_format = '%d-%m-%Y %I:%M:%S'
+    date_format1 = '%m/%d/%Y %I:%M %p'
+    prop = random.random()
+    stime = time.mktime(time.strptime(start, date_format1))
+    etime = time.mktime(time.strptime(end, date_format1))
+    ptime = stime + prop * (etime - stime)
+    return time.strftime(date_format, time.localtime(ptime))
+
+
 def generate_time():
     start = "1/1/1978 1:30 PM"
     end = "1/1/2021 4:50 AM"
@@ -216,12 +231,12 @@ def generate_time():
     return time.strftime(date_format, time.localtime(ptime)) + ":00"
 
 
-def main():
-    connection = create_connection("kinopoisk", "postgres", "u8d12255", "localhost", "5432")
-    cursor = connection.cursor()
-    sources = KinopoiskData()
+def fill_mpaa(sources, connection):
     for mpaa in sources.mpaas:
-        cursor.execute(f"INSERT INTO mpaa (mpaa_title, mpaa_description) VALUES (%s, %s)", mpaa)
+        execute_query(connection, f"INSERT INTO mpaa (mpaa_title, mpaa_description) VALUES (%s, %s)", mpaa)
+
+
+def fill_films(sources, connection):
     for film in sources.films:
         inserts_elem = dict()
         inserts_elem["film_title"] = film
@@ -239,11 +254,15 @@ def main():
         inserts_elem["grade"] = generate_random_list_not_null(generate_grade, 0, 1000000)
         inserts_elem["fees"] = random.uniform(0, 10000000000)
         inserts_elem["genres"] = sources.generate_random_genres(random.randint(0, 9))
-        cursor.execute(f"INSERT INTO films (film_title, film_description, countries, production_date, slogan, "
-                       f"poster, premiere, age_restrictions, budget, duration, mpaa, trailer, grade, fees, "
-                       f"genres) VALUES (%(film_title)s, %(film_description)s, %(countries)s, %(production_date)s, "
-                       f"%(slogan)s, %(poster)s, %(premiere)s, %(age_restrictions)s, %(budget)s, %(duration)s, "
-                       f"%(mpaa)s, %(trailer)s, %(grade)s, %(fees)s, %(genres)s)", inserts_elem)
+        execute_query(connection, f"INSERT INTO films (film_title, film_description, countries, production_date, "
+                                  f"slogan, poster, premiere, age_restrictions, budget, duration, mpaa, trailer, "
+                                  f"grade, fees, genres) VALUES (%(film_title)s, %(film_description)s, "
+                                  f"%(countries)s, %(production_date)s, %(slogan)s, %(poster)s, %(premiere)s, "
+                                  f"%(age_restrictions)s, %(budget)s, %(duration)s, %(mpaa)s, %(trailer)s, "
+                                  f"%(grade)s, %(fees)s, %(genres)s)", inserts_elem)
+
+
+def fill_critics_reviews(sources, connection):
     for i in range(1000):
         inserts_elem = dict()
         inserts_elem["film_id"] = sources.generate_random_id('films', 'film_id')
@@ -252,14 +271,17 @@ def main():
         inserts_elem["content"] = generate_random_string(1, 400)
         inserts_elem["likes"] = random.randint(0, 1000000)
         inserts_elem["dislikes"] = random.randint(0, 1000000)
-        inserts_elem["creation_date"] = generate_date()
+        inserts_elem["creation_date"] = generate_timestamp()
         inserts_elem["link"] = generate_random_string(7, 200)
         inserts_elem["critic"] = sources.generate_random_fcs()
         inserts_elem["resource"] = generate_random_string(1, 30)
-        cursor.execute(f"INSERT INTO critics_reviews (film_id, review_type, title, content, likes, dislikes, "
-                       f"creation_date, link, critic, resource) VALUES (%(film_id)s, %(review_type)s, %(title)s, "
-                       f"%(content)s, %(likes)s, %(dislikes)s, %(creation_date)s, %(link)s, %(critic)s, "
-                       f"%(resource)s)", inserts_elem)
+        execute_query(connection, f"INSERT INTO critics_reviews (film_id, review_type, title, content, likes, "
+                                  f"dislikes, creation_date, link, critic, resource) VALUES (%(film_id)s, "
+                                  f"%(review_type)s, %(title)s, %(content)s, %(likes)s, %(dislikes)s, "
+                                  f"%(creation_date)s, %(link)s, %(critic)s, %(resource)s)", inserts_elem)
+
+
+def fill_persons(sources, connection):
     for i in range(1000):
         inserts_elem = dict()
         inserts_elem["FCs"] = sources.generate_random_fcs()
@@ -268,8 +290,12 @@ def main():
         inserts_elem["birthdate"] = generate_date()
         inserts_elem["place_of_birth"] = random.choice(sources.countries)
         inserts_elem["spouses"] = generate_random_list(sources.generate_random_fcs, 0, 10)
-        cursor.execute(f"INSERT INTO persons (FCs, photo, height, birthdate, place_of_birth, spouses) VALUES (%("
-                       f"FCs)s, %(photo)s, %(height)s, %(birthdate)s, %(place_of_birth)s, %(spouses)s)", inserts_elem)
+        execute_query(connection, f"INSERT INTO persons (FCs, photo, height, birthdate, place_of_birth, "
+                                  f"spouses) VALUES (%(FCs)s, %(photo)s, %(height)s, %(birthdate)s, "
+                                  f"%(place_of_birth)s, %(spouses)s)", inserts_elem)
+
+
+def fill_users(sources, connection):
     for i in range(1000):
         inserts_elem = dict()
         inserts_elem["FCs"] = sources.generate_random_fcs()
@@ -286,11 +312,14 @@ def main():
         inserts_elem["vk_link"] = generate_random_string(0, 50)
         inserts_elem["facebook_link"] = generate_random_string(0, 50)
         inserts_elem["twitter_link"] = generate_random_string(0, 50)
-        cursor.execute(f"INSERT INTO users (FCs, password, number, email, avatar, login, interests, gender, "
-                       f"birthdate, country, city, vk_link, facebook_link, twitter_link) VALUES (%(FCs)s, "
-                       f"%(password)s, %(number)s, %(email)s, %(avatar)s, %(login)s, %(interests)s, %(gender)s, "
-                       f"%(birthdate)s, %(country)s, %(city)s, %(vk_link)s, %(facebook_link)s, %(twitter_link)s)",
-                       inserts_elem)
+        execute_query(connection, f"INSERT INTO users (FCs, password, number, email, avatar, login, interests, "
+                                  f"gender, birthdate, country, city, vk_link, facebook_link, twitter_link) VALUES ("
+                                  f"%(FCs)s, %(password)s, %(number)s, %(email)s, %(avatar)s, %(login)s, "
+                                  f"%(interests)s, %(gender)s, %(birthdate)s, %(country)s, %(city)s, %(vk_link)s, "
+                                  f"%(facebook_link)s, %(twitter_link)s)", inserts_elem)
+
+
+def fill_audience_reviews(sources, connection):
     for i in range(1000):
         inserts_elem = dict()
         inserts_elem["film_id"] = sources.generate_random_id('films', 'film_id')
@@ -300,17 +329,24 @@ def main():
         inserts_elem["content"] = generate_random_string(1, 5000)
         inserts_elem["likes"] = random.randint(0, 100000000)
         inserts_elem["dislikes"] = random.randint(0, 100000000)
-        inserts_elem["creation_date"] = generate_date()
+        inserts_elem["creation_date"] = generate_timestamp()
         inserts_elem["link"] = generate_random_string(7, 200)
-        cursor.execute(f"INSERT INTO audience_reviews (film_id, user_id, review_type, title, content, likes, "
-                       f"dislikes, creation_date, link) VALUES (%(film_id)s, %(user_id)s, %(review_type)s, "
-                       f"%(title)s, %(content)s, %(likes)s, %(dislikes)s, %(creation_date)s, %(link)s)", inserts_elem)
-    '''for i in range(1000):
+        execute_query(connection, f"INSERT INTO audience_reviews (film_id, user_id, review_type, title, content, "
+                                  f"likes, dislikes, creation_date, link) VALUES (%(film_id)s, %(user_id)s, "
+                                  f"%(review_type)s, %(title)s, %(content)s, %(likes)s, %(dislikes)s, "
+                                  f"%(creation_date)s, %(link)s)", inserts_elem)
+
+
+def fill_friends(sources, connection):
+    for i in range(1000):
         inserts_elem = dict()
         inserts_elem["first_friend_id"] = sources.generate_random_id('users', 'user_id')
         inserts_elem["second_friend_id"] = sources.generate_random_id('users', 'user_id')
-        cursor.execute(f"INSERT INTO friends (first_friend_id, second_friend_id) VALUES (%(first_friend_id)s, "
-                       f"%(second_friend_id)s)", inserts_elem)'''
+        execute_query(connection, f"INSERT INTO friends (first_friend_id, second_friend_id) VALUES (%("
+                                  f"first_friend_id)s, %(second_friend_id)s)", inserts_elem)
+
+
+def fill_folders(sources, connection):
     for i in range(1000):
         inserts_elem = dict()
         inserts_elem["user_id"] = sources.generate_random_id('users', 'user_id')
@@ -319,33 +355,42 @@ def main():
         inserts_elem["sort"] = generate_random_string(1, 25)
         inserts_elem["description"] = generate_random_string(1, 400)
         inserts_elem["subscribe_to_updates"] = bool(random.randint(0, 1))
-        cursor.execute(f"INSERT INTO folders (user_id, title, folder_type, sort, description, subscribe_to_updates) "
-                       f"VALUES (%(user_id)s, %(title)s, %(folder_type)s, %(sort)s, %(description)s, "
-                       f"%(subscribe_to_updates)s)", inserts_elem)
-    cursor.execute("SELECT DISTINCT folder_id FROM folders WHERE folder_type = 'films'")
-    folders = cursor.fetchall()
+        execute_query(connection, f"INSERT INTO folders (user_id, title, folder_type, sort, description, "
+                                  f"subscribe_to_updates) VALUES (%(user_id)s, %(title)s, %(folder_type)s,"
+                                  f" %(sort)s, %(description)s, %(subscribe_to_updates)s)", inserts_elem)
+
+
+def fill_composition_films_folder(sources, connection):
+    folders = execute_read_query(connection, "SELECT DISTINCT folder_id FROM folders WHERE folder_type = 'films'")
     for i in range(1000):
         inserts_elem = dict()
         inserts_elem["film_id"] = sources.generate_random_id("films", "film_id")
         inserts_elem["folder_id"] = random.choice(folders)[0]
-        cursor.execute(f"INSERT INTO composition_films_folder (film_id, folder_id) VALUES (%(film_id)s, "
-                       f"%(folder_id)s)", inserts_elem)
-    cursor.execute("SELECT DISTINCT folder_id FROM folders WHERE folder_type = 'persons'")
-    folders = cursor.fetchall()
+        execute_query(connection, f"INSERT INTO composition_films_folder (film_id, folder_id) VALUES (%(film_id)s,  "
+                                  f"%(folder_id)s)", inserts_elem)
+
+
+def fill_composition_persons_folder(sources, connection):
+    folders = execute_read_query(connection, "SELECT DISTINCT folder_id FROM folders WHERE folder_type = 'persons'")
     for i in range(1000):
         inserts_elem = dict()
         inserts_elem["person_id"] = sources.generate_random_id("persons", "person_id")
         inserts_elem["folder_id"] = random.choice(folders)[0]
-        cursor.execute(f"INSERT INTO composition_persons_folder (person_id, folder_id) VALUES (%(person_id)s, "
-                       f"%(folder_id)s)", inserts_elem)
-    cursor.execute("SELECT DISTINCT folder_id FROM folders WHERE folder_type = 'reviews'")
-    folders = cursor.fetchall()
+        execute_query(connection, f"INSERT INTO composition_persons_folder (person_id, folder_id) VALUES (%("
+                                  f"person_id)s, %(folder_id)s)", inserts_elem)
+
+
+def fill_composition_reviews_folder(sources, connection):
+    folders = execute_read_query(connection, "SELECT DISTINCT folder_id FROM folders WHERE folder_type = 'reviews'")
     for i in range(1000):
         inserts_elem = dict()
         inserts_elem["audience_review_id"] = sources.generate_random_id("audience_reviews", "audience_review_id")
         inserts_elem["folder_id"] = random.choice(folders)[0]
-        cursor.execute(f"INSERT INTO composition_reviews_folder (audience_review_id, folder_id) VALUES (%("
-                       f"audience_review_id)s, %(folder_id)s)", inserts_elem)
+        execute_query(connection, f"INSERT INTO composition_reviews_folder (audience_review_id, folder_id) VALUES ("
+                                  f"%(audience_review_id)s, %(folder_id)s)", inserts_elem)
+
+
+def fill_comments(sources, connection):
     for i in range(1000):
         inserts_elem = dict()
         inserts_elem["audience_review_id"] = sources.generate_random_id("audience_reviews", "audience_review_id")
@@ -354,10 +399,10 @@ def main():
         inserts_elem["content"] = generate_random_string(1, 1000)
         inserts_elem["likes"] = random.randint(0, 1000000)
         inserts_elem["dislikes"] = random.randint(0, 1000000)
-        inserts_elem["creation_date"] = generate_date()
-        cursor.execute(f"INSERT INTO comments (audience_review_id, user_id, title, content, likes, dislikes, "
-                       f"creation_date) VALUES (%(audience_review_id)s, %(user_id)s, %(title)s, %(content)s, "
-                       f"%(likes)s, %(dislikes)s, %(creation_date)s)", inserts_elem)
+        inserts_elem["creation_date"] = generate_timestamp()
+        execute_query(connection, f"INSERT INTO comments (audience_review_id, user_id, title, content, likes, "
+                                  f"dislikes, creation_date) VALUES (%(audience_review_id)s, %(user_id)s, %(title)s,"
+                                  f" %(content)s, %(likes)s, %(dislikes)s, %(creation_date)s)", inserts_elem)
     for i in range(1000):
         inserts_elem = dict()
         inserts_elem["critics_review_id"] = sources.generate_random_id("critics_reviews", "critics_review_id")
@@ -367,9 +412,9 @@ def main():
         inserts_elem["likes"] = random.randint(0, 1000000)
         inserts_elem["dislikes"] = random.randint(0, 1000000)
         inserts_elem["creation_date"] = generate_date()
-        cursor.execute(f"INSERT INTO comments (critics_review_id, user_id, title, content, likes, dislikes, "
-                       f"creation_date) VALUES (%(critics_review_id)s, %(user_id)s, %(title)s, %(content)s, "
-                       f"%(likes)s, %(dislikes)s, %(creation_date)s)", inserts_elem)
+        execute_query(connection, f"INSERT INTO comments (critics_review_id, user_id, title, content, likes, "
+                                  f"dislikes, creation_date) VALUES (%(critics_review_id)s, %(user_id)s, %(title)s, "
+                                  f"%(content)s, %(likes)s, %(dislikes)s, %(creation_date)s)", inserts_elem)
     for i in range(1000):
         inserts_elem = dict()
         inserts_elem["references_comment_id"] = sources.generate_random_id("comments", "comment_id")
@@ -379,17 +424,37 @@ def main():
         inserts_elem["likes"] = random.randint(0, 1000000)
         inserts_elem["dislikes"] = random.randint(0, 1000000)
         inserts_elem["creation_date"] = generate_date()
-        cursor.execute(f"INSERT INTO comments (references_comment_id, user_id, title, content, likes, dislikes, "
-                       f"creation_date) VALUES (%(references_comment_id)s, %(user_id)s, %(title)s, %(content)s, "
-                       f"%(likes)s, %(dislikes)s, %(creation_date)s)", inserts_elem)
+        execute_query(connection, f"INSERT INTO comments (references_comment_id, user_id, title, content, likes, "
+                                  f"dislikes, creation_date) VALUES (%(references_comment_id)s, %(user_id)s, "
+                                  f"%(title)s, %(content)s, %(likes)s, %(dislikes)s, %(creation_date)s)", inserts_elem)
+
+
+def fill_composition_of_film(sources, connection):
     for i in range(1000):
         inserts_elem = dict()
         inserts_elem["film_id"] = sources.generate_random_id("films", "film_id")
         inserts_elem["person_id"] = sources.generate_random_id("persons", "person_id")
         inserts_elem["roles"] = random.choice(sources.roles)
-        cursor.execute(
-            f"INSERT INTO composition_of_film (film_id, person_id, roles) VALUES (%(film_id)s, %(person_id)s, "
-            f"%(roles)s)", inserts_elem)
+        execute_query(connection, f"INSERT INTO composition_of_film (film_id, person_id, roles) VALUES (%(film_id)s, "
+                                  f"%(person_id)s, %(roles)s)", inserts_elem)
+
+
+def main():
+    connection = create_connection("kinopoisk", "postgres", "u8d12255", "localhost", "5432")
+    sources = KinopoiskData()
+    fill_mpaa(sources, connection)
+    fill_films(sources, connection)
+    fill_critics_reviews(sources, connection)
+    fill_persons(sources, connection)
+    fill_users(sources, connection)
+    fill_audience_reviews(sources, connection)
+    fill_friends(sources, connection)
+    fill_folders(sources, connection)
+    fill_composition_films_folder(sources, connection)
+    fill_composition_persons_folder(sources, connection)
+    fill_composition_reviews_folder(sources, connection)
+    fill_comments(sources, connection)
+    fill_composition_of_film(sources, connection)
 
 
 if __name__ == '__main__':
