@@ -13,6 +13,4 @@ inserts_elem = dict()
         inserts_elem[""] =
         inserts_elem[""] =
         inserts_elem[""] =
-        cursor.execute(f"INSERT INTO users (FCs, password, number, email, avatar, login, interests, gender, "
-                       f"birthdate, country, city, vk_link, facebook_link, twitter_link) VALUES (%()s, %()s, %()s, "
-                       f"%()s, %()s, %()s, %()s, %()s, %()s, %()s, %()s, %()s, %()s, %()s)", inserts_elem)
+        cursor.execute(f"INSERT INTO  () VALUES (%()s, %()s, %()s, %()s, %()s, %()s, %()s, %()s, %()s, %()s, %()s, %()s, %()s, %()s)", inserts_elem)

@@ -1,11 +1,9 @@
 import random
 import string
 import time
-from contextlib import closing
 
 import psycopg2
 import json
-import io
 from psycopg2 import OperationalError
 
 
@@ -120,6 +118,9 @@ class KinopoiskData:
         if self.cash_id[table]:
             return random.choice(self.cash_id[table])[0]
         return None
+
+    def generate_random_roles(self, a):
+        return random.sample(self.roles, a)
 
 
 def create_connection(db_name, db_user, db_password, db_host, db_port):
@@ -280,7 +281,7 @@ def main():
         inserts_elem["interests"] = generate_random_string(0, 1000)
         inserts_elem["gender"] = sources.generate_random_gender()
         inserts_elem["birthdate"] = generate_date()
-        inserts_elem["country"] = sources.generate_random_countries(1)[0]
+        inserts_elem["country"] = sources.generate_random_country()
         inserts_elem["city"] = generate_random_string(0, 30)
         inserts_elem["vk_link"] = generate_random_string(0, 50)
         inserts_elem["facebook_link"] = generate_random_string(0, 50)
@@ -328,7 +329,7 @@ def main():
         inserts_elem["film_id"] = sources.generate_random_id("films", "film_id")
         inserts_elem["folder_id"] = random.choice(folders)[0]
         cursor.execute(f"INSERT INTO composition_films_folder (film_id, folder_id) VALUES (%(film_id)s, "
-                       f"%(folder_id)s", inserts_elem)
+                       f"%(folder_id)s)", inserts_elem)
     cursor.execute("SELECT DISTINCT folder_id FROM folders WHERE folder_type = 'persons'")
     folders = cursor.fetchall()
     for i in range(1000):
@@ -336,15 +337,59 @@ def main():
         inserts_elem["person_id"] = sources.generate_random_id("persons", "person_id")
         inserts_elem["folder_id"] = random.choice(folders)[0]
         cursor.execute(f"INSERT INTO composition_persons_folder (person_id, folder_id) VALUES (%(person_id)s, "
-                       f"%(folder_id)s", inserts_elem)
+                       f"%(folder_id)s)", inserts_elem)
     cursor.execute("SELECT DISTINCT folder_id FROM folders WHERE folder_type = 'reviews'")
     folders = cursor.fetchall()
     for i in range(1000):
         inserts_elem = dict()
         inserts_elem["audience_review_id"] = sources.generate_random_id("audience_reviews", "audience_review_id")
         inserts_elem["folder_id"] = random.choice(folders)[0]
-        cursor.execute(f"INSERT INTO composition_reviews_folder (audience_review_id, folder_id) VALUES (%(person_id)s, "
-                       f"%(folder_id)s", inserts_elem)
+        cursor.execute(f"INSERT INTO composition_reviews_folder (audience_review_id, folder_id) VALUES (%("
+                       f"audience_review_id)s, %(folder_id)s)", inserts_elem)
+    for i in range(1000):
+        inserts_elem = dict()
+        inserts_elem["audience_review_id"] = sources.generate_random_id("audience_reviews", "audience_review_id")
+        inserts_elem["user_id"] = sources.generate_random_id("users", "user_id")
+        inserts_elem["title"] = generate_random_string(0, 50)
+        inserts_elem["content"] = generate_random_string(1, 1000)
+        inserts_elem["likes"] = random.randint(0, 1000000)
+        inserts_elem["dislikes"] = random.randint(0, 1000000)
+        inserts_elem["creation_date"] = generate_date()
+        cursor.execute(f"INSERT INTO comments (audience_review_id, user_id, title, content, likes, dislikes, "
+                       f"creation_date) VALUES (%(audience_review_id)s, %(user_id)s, %(title)s, %(content)s, "
+                       f"%(likes)s, %(dislikes)s, %(creation_date)s)", inserts_elem)
+    for i in range(1000):
+        inserts_elem = dict()
+        inserts_elem["critics_review_id"] = sources.generate_random_id("critics_reviews", "critics_review_id")
+        inserts_elem["user_id"] = sources.generate_random_id("users", "user_id")
+        inserts_elem["title"] = generate_random_string(0, 50)
+        inserts_elem["content"] = generate_random_string(1, 1000)
+        inserts_elem["likes"] = random.randint(0, 1000000)
+        inserts_elem["dislikes"] = random.randint(0, 1000000)
+        inserts_elem["creation_date"] = generate_date()
+        cursor.execute(f"INSERT INTO comments (critics_review_id, user_id, title, content, likes, dislikes, "
+                       f"creation_date) VALUES (%(critics_review_id)s, %(user_id)s, %(title)s, %(content)s, "
+                       f"%(likes)s, %(dislikes)s, %(creation_date)s)", inserts_elem)
+    for i in range(1000):
+        inserts_elem = dict()
+        inserts_elem["references_comment_id"] = sources.generate_random_id("comments", "comment_id")
+        inserts_elem["user_id"] = sources.generate_random_id("users", "user_id")
+        inserts_elem["title"] = generate_random_string(0, 50)
+        inserts_elem["content"] = generate_random_string(1, 1000)
+        inserts_elem["likes"] = random.randint(0, 1000000)
+        inserts_elem["dislikes"] = random.randint(0, 1000000)
+        inserts_elem["creation_date"] = generate_date()
+        cursor.execute(f"INSERT INTO comments (references_comment_id, user_id, title, content, likes, dislikes, "
+                       f"creation_date) VALUES (%(references_comment_id)s, %(user_id)s, %(title)s, %(content)s, "
+                       f"%(likes)s, %(dislikes)s, %(creation_date)s)", inserts_elem)
+    for i in range(1000):
+        inserts_elem = dict()
+        inserts_elem["film_id"] = sources.generate_random_id("films", "film_id")
+        inserts_elem["person_id"] = sources.generate_random_id("persons", "person_id")
+        inserts_elem["roles"] = random.choice(sources.roles)
+        cursor.execute(
+            f"INSERT INTO composition_of_film (film_id, person_id, roles) VALUES (%(film_id)s, %(person_id)s, "
+            f"%(roles)s)", inserts_elem)
 
 
 if __name__ == '__main__':
