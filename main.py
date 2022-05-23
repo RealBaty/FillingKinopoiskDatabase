@@ -442,19 +442,19 @@ def fill_composition_of_film(sources, connection):
 def main():
     connection = create_connection("kinopoisk", "postgres", "u8d12255", "localhost", "5432")
     sources = KinopoiskData()
-    '''fill_mpaa(sources, connection)
+    fill_mpaa(sources, connection)
     fill_films(sources, connection)
     fill_critics_reviews(sources, connection)
     fill_persons(sources, connection)
     fill_users(sources, connection)
-    fill_audience_reviews(sources, connection)'''
+    fill_audience_reviews(sources, connection)
     fill_friends(sources, connection)
-    '''fill_folders(sources, connection)
+    fill_folders(sources, connection)
     fill_composition_films_folder(sources, connection)
     fill_composition_persons_folder(sources, connection)
     fill_composition_reviews_folder(sources, connection)
     fill_comments(sources, connection)
-    fill_composition_of_film(sources, connection)'''
+    fill_composition_of_film(sources, connection)
 
 
 if __name__ == '__main__':
